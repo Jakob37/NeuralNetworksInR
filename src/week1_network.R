@@ -72,18 +72,21 @@ NeuralNetwork <- R6Class(
             operating_data
         },
         
-        # Train neural network using mini-batch stochastic gradient descent
-        #
-        # training_data: (MAYBE NOT) List of tuples (x, y) representing training inputs and desired outputs
-        # test_data: If provided, evaluating after each epoch (useful for tracking, but slowing down)
-        SGD = function(training_data, epochs, mini_batch_size, eta, test_data=NULL) {
+        #' Train neural network using mini-batch stochastic gradient descent
+        #'
+        #' Train format: Row with datapoints, and category in last?
+        #'
+        #' training_data: (MAYBE NOT) List of tuples (x, y) representing training inputs and desired outputs
+        #' test_data: If provided, evaluating after each epoch (useful for tracking, but slowing down)
+        SGD = function(training_data, epochs, mini_batch_size, eta, test_data=NULL, debug=FALSE) {
+            
             if (!is.null(test_data)) {
                 n_test <- length(test_data[[1]])
             }
             
             n <- length(training_data[[1]])
             
-            vapply(
+            sapply(
                 seq_len(epochs),
                 function(epoch) {
                     shuffled_train_data <- training_data[sample(seq_len(nrow(training_data))),]
@@ -92,6 +95,15 @@ NeuralNetwork <- R6Class(
                     for (chunk_name in names(chunks)) {
                         chunk <- chunks[[chunk_name]]
                         # Command: UPDATE MINI BATCH?
+                        new_pars <- self$update_mini_batch(chunk, eta)
+                        
+                        if (debug) {
+                            message("Biases before: ", paste(self$biases, collapse=", "))
+                            message("Biases after: ", paste(new_pars$biases, collapse=", "))
+                        }
+                        
+                        self$weights <- new_pars$weights
+                        self$biases <- new_pars$biases
                     }
                     
                     if (!is.null(test_data)) {
@@ -100,8 +112,7 @@ NeuralNetwork <- R6Class(
                     else {
                         message("Epoch ", epoch, " complete")
                     }
-                },
-                rep(0)
+                }
             )
         },
         
@@ -115,25 +126,31 @@ NeuralNetwork <- R6Class(
             nabla_w <- NULL
             
             apply(mini_batch, 1, function(row) {
-                data <- row[, -1]
-                annot <- row[, 1]
-                delta_nablas <- self$backprop(data, annot)
-                delta_nabla_b <- delta_nablas$b
-                delta_nabla_w <- delta_nablas$w
+                data <- row[1:length(row)-1]
+                annot <- row[length(row)]
+                
+                message(data)
+                message(annot)
+                
+                # delta_nablas <- self$backprop(data, annot)
+                # delta_nabla_b <- delta_nablas$b
+                # delta_nabla_w <- delta_nablas$w
             })
             
-            self$weights <- NULL
-            self$biases <- NULL
+            list(weights=self$weights, biases=self$biases)
+            
+            # self$weights <- NULL
+            # self$biases <- NULL
             
         },
         
         # Return tuple (nabla_b, nabla_w) representing gradient for cost function C_x
         # nabla_b and nabla_w are layer-by-layer lists of numpy arrays, similar to self$biases and self$weights
-        backprop = function(x, y) {
+        backprop = function(datapoints, outcome, biases, weights) {
             
             nabla_b <- NULL
             nabla_w <- NULL
-            activation <- x
+            activation <- datapoints
             
             # List to store activations, layer by layer
             activations <- list()
@@ -141,9 +158,9 @@ NeuralNetwork <- R6Class(
             # List to store z vectors, layer by layer
             zs <- list()
             
-            sapply(seq_len(self$biases), function(index) {
-                b <- self$biases[[index]]
-                w <- self$weights[[index]]
+            sapply(seq_len(biases), function(index) {
+                b <- biases[[index]]
+                w <- weights[[index]]
                 z <- w %*% activation + b
                 zs <- c(zs, z)
                 activation <- sigmoid(z)
@@ -151,7 +168,7 @@ NeuralNetwork <- R6Class(
             })
             
             # Backward pass
-            delta <- self$cost_derivative(activations[length(activations)-1], y) *
+            delta <- self$cost_derivative(activations[length(activations)-1], outcome) *
                 self$sigmoid_prime(zs[length(zs-1)])
             
             nabla_b[length(nabla_b)-1] <- delta
@@ -186,4 +203,19 @@ NeuralNetwork <- R6Class(
         }
     )
 )
+
+test_network <- function() {
+    nn <- NeuralNetwork$new(c(4,3,2))
+    nn$feedforward(c(1,2,1,2))
+    
+    dummy_data <- data.frame(
+        c1=abs(rnorm(n=10, mean=0, sd=1)),
+        c2=abs(rnorm(n=10, mean=0, sd=1)),
+        c3=abs(rnorm(n=10, mean=0, sd=1)),
+        c4=abs(rnorm(n=10, mean=0, sd=1)),
+        outcome=rep(c(0,1), 5)
+    )
+    
+    nn$SGD(dummy_data, epochs=2, mini_batch_size=3, eta=0.01, debug=TRUE)
+}
 
