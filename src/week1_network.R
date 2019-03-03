@@ -148,31 +148,60 @@ NeuralNetwork <- R6Class(
         # nabla_b and nabla_w are layer-by-layer lists of numpy arrays, similar to self$biases and self$weights
         backprop = function(datapoints, outcome, biases, weights) {
             
-            nabla_b <- NULL
-            nabla_w <- NULL
+            warning("Expecting transposed data? Double check this formatting at some point?")
+            
+            # Data insights:
+            # x: Tuple in single-input data format (so 1 x 784 for pictures)
+            # y: Tuple in single-output data format (so 1 x 10 for pictures, with correct activation as '1')
+            # nabla_b: Corresponding to bias matrices
+            # nabla_w: Corresponding to weight matrices
+            # zs: Same format as bias vector
+            # activations - Three layers, corresponding to node activations, including input layer
+            # delta - Difference in network activation final layer and actual activation
+            
+            # nabla_b and nabla_w are assigned outcome difference, which then is propagated backwards layer by layer
+            
+            
+            nabla_b <- lapply(biases, function(layer) { matrix(ncol=ncol(layer), nrow=nrow(layer), data=0) })
+            nabla_w <- lapply(weights, function(layer) { matrix(ncol=ncol(layer), nrow=nrow(layer), data=0) })
+            
             activation <- datapoints
             
             # List to store activations, layer by layer
-            activations <- list()
+            activations <- list(activation)
             
             # List to store z vectors, layer by layer
             zs <- list()
             
-            sapply(seq_len(biases), function(index) {
+            for (index in seq_len(length(biases))) {
+                
                 b <- biases[[index]]
                 w <- weights[[index]]
-                z <- w %*% activation + b
-                zs <- c(zs, z)
+                z <- w %*% activation + as.vector(b)
+                zs[[index]] <- z
                 activation <- sigmoid(z)
-                activations <- c(activations, activation)
-            })
+                activations[[index+1]] <- activation
+            }
             
-            # Backward pass
-            delta <- self$cost_derivative(activations[length(activations)-1], outcome) *
-                self$sigmoid_prime(zs[length(zs-1)])
+            # browser()
             
-            nabla_b[length(nabla_b)-1] <- delta
-            nabla_w[length((nabla_w)-1)] <- delta %*% t(activations[length(activations)-2])
+            # Backward pass: Calculating activation / outcome diff
+            cost_derivatives <- self$cost_derivative(activations[[length(activations)-1]], outcome)
+            # Multiplying with sigmoid derivative? Obtaining delta? What is delta here?
+            delta <- cost_derivatives * self$sigmoid_prime(zs[[length(zs)-1]])
+
+            # browser()
+                        
+            nabla_b[[length(nabla_b)-1]] <- delta
+            nabla_w[[length((nabla_w)-1)]] <- delta %*% t(activations[length(activations)-2])
+            
+            for (layer in range(2, length(biases))) {
+                z <- zs[[length(zs) - layer]]
+                sp <- self$sigmoid_prime(z)
+                delta <- (t(weights[length(weights)-layer+1]) %*% delta) * sp
+                nabla_b[[length(nabla_b)-layer]] <- delta
+                nabla_w[[length(nabla_w)-layer]] <- delta %*% t(activations[[length(activations)-layer-1]])
+            }
             
             list(b=nabla_b, w=nabla_w)
         },
@@ -204,18 +233,24 @@ NeuralNetwork <- R6Class(
     )
 )
 
-test_network <- function() {
-    nn <- NeuralNetwork$new(c(4,3,2))
-    nn$feedforward(c(1,2,1,2))
-    
-    dummy_data <- data.frame(
-        c1=abs(rnorm(n=10, mean=0, sd=1)),
-        c2=abs(rnorm(n=10, mean=0, sd=1)),
-        c3=abs(rnorm(n=10, mean=0, sd=1)),
-        c4=abs(rnorm(n=10, mean=0, sd=1)),
-        outcome=rep(c(0,1), 5)
-    )
-    
-    nn$SGD(dummy_data, epochs=2, mini_batch_size=3, eta=0.01, debug=TRUE)
-}
+nn <- NeuralNetwork$new(c(4,3,2))
+# nn$feedforward(c(1,2,1,2))
+
+# >>> "c(" + ", ".join([str(e) for e in training_data[0][0].flatten().tolist()]) + ")"
+first_pic <- c(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.31640625, 0.78515625, 0.98828125, 0.99609375, 0.98828125, 0.98828125, 0.62109375, 0.08984375, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.63671875, 0.984375, 0.984375, 0.98828125, 0.984375, 0.984375, 0.984375, 0.82421875, 0.0859375, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.19921875, 0.71484375, 0.71484375, 0.4765625, 0.26953125, 0.390625, 0.9375, 0.984375, 0.5703125, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.80859375, 0.984375, 0.8984375, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.80859375, 0.984375, 0.8984375, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.02734375, 0.828125, 0.98828125, 0.90234375, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.03515625, 0.60546875, 0.984375, 0.984375, 0.61328125, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.19140625, 0.76953125, 0.984375, 0.984375, 0.86328125, 0.125, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.06640625, 0.484375, 0.80859375, 0.80859375, 0.91015625, 0.984375, 0.984375, 0.8515625, 0.13671875, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.58984375, 0.984375, 0.984375, 0.984375, 0.98828125, 0.984375, 0.984375, 0.21875, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.6328125, 0.98828125, 0.98828125, 0.90625, 0.91015625, 0.98828125, 0.98828125, 0.98828125, 0.3359375, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.23046875, 0.68359375, 0.640625, 0.03125, 0.03515625, 0.44140625, 0.9375, 0.984375, 0.82421875, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.39453125, 0.984375, 0.984375, 0.125, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.171875, 0.921875, 0.984375, 0.453125, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.25, 0.96875, 0.984375, 0.453125, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.19921875, 0.5390625, 0.04296875, 0.0, 0.0, 0.0, 0.0, 0.0, 0.140625, 0.8671875, 0.98828125, 0.98828125, 0.453125, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.36328125, 0.984375, 0.79296875, 0.34375, 0.1328125, 0.0, 0.0859375, 0.22265625, 0.85546875, 0.984375, 0.984375, 0.90234375, 0.1640625, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.09765625, 0.921875, 0.98828125, 0.984375, 0.9140625, 0.71875, 0.83984375, 0.98828125, 0.984375, 0.984375, 0.984375, 0.4140625, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3671875, 0.98828125, 0.984375, 0.984375, 0.984375, 0.984375, 0.98828125, 0.984375, 0.88671875, 0.46484375, 0.015625, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3359375, 0.82421875, 0.984375, 0.984375, 0.984375, 0.7421875, 0.45703125, 0.0625, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+first_outcome <- c(0, 1, 0, 0, 0, 0, 0, 0, 0, 0)
+               
+# train <- load_training(n_max=10)
+
+dummy_data <- data.frame(
+    c1=abs(rnorm(n=10, mean=0, sd=1)),
+    c2=abs(rnorm(n=10, mean=0, sd=1)),
+    c3=abs(rnorm(n=10, mean=0, sd=1)),
+    c4=abs(rnorm(n=10, mean=0, sd=1)),
+    outcome=rep(c(0,1), 5)
+)
+
+# nn$backprop(as.matrix(dummy_data[, 1:4]), dummy_data[, ncol(dummy_data)], nn$biases, nn$weights)
+
+# nn$SGD(dummy_data, epochs=1, mini_batch_size=3, eta=0.01, debug=TRUE)
 
